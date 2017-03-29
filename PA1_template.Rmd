@@ -1,25 +1,120 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "PA1_template.Rmd"
+author: "owilks"
+date: "March 29, 2017"
+output: html_document
 ---
 
+#Prepping all of the relevant data
 
-## Loading and preprocessing the data
+Firstly we need to retrieve the data from the website and load it into your system along with the library dependencies. (Including caching the data to increase efficiency)
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE, cache=TRUE)
+library(ggplot2)
+library(reshape2)
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip","repdata%2Fdata%2Factivity.zip")
+unzip("repdata%2Fdata%2Factivity.zip")
+activity <-read.csv("activity.csv")
+```
+
+#Part 1 (What is mean total number of steps taken per day?)
+
+* Make a histogram of the total number of steps taken each day
+* Calculate and report the mean and median total number of steps taken per day
+
+Initially we create a subset that ignores the missing values for our plot and then proceed. This subset can be used until we replace the missing values later on in the report.
+```{r prep1}
+#subsetting out the NA values
+val <- !is.na(activity$steps)
+actsub <- activity[val,]
+```
+
+Afterwards we can move on towards answering the questions
+```{r q1}
+dstep <- with(actsub, tapply(steps,date,sum))
+dstep<-dstep[!is.na(dstep)]
+ggplot()+aes(dstep)+geom_histogram(binwidth=2500)+labs(y="Histogram count",x="Daily volume of steps")+ggtitle("Histogram of Daily volume of steps")
+dsmean <- mean(dstep)
+dsmed <- median(dstep)
+```
+
+For a closer look at the data, the calculated mean is `r dsmean ` and the median is `r dsmed`.
 
 
+#Part 2 (What is the average daily activity pattern?)
 
-## What is mean total number of steps taken per day?
+* Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+* Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
 
+Both of those questions are answered below!
 
+```{r q2}
+istep <- aggregate(actsub$steps,by=actsub["interval"],FUN=mean)
+names(istep) <- c("int","steps")
+ggplot(istep,aes(int,steps))+geom_point()+labs(x="Interval",y="Steps(Mean)")+ggtitle("Mean Steps per Interval")
 
-## What is the average daily activity pattern?
+#Calculating the max and plugging it back into the index of the dataframe
+intmax <-istep[which.max(istep$steps),1]
+```
 
+The interval with the largest amount of average steps is `r intmax`.
 
+#Part 3 (Imputing missing values)
 
-## Imputing missing values
+Note that there are a number of days/intervals where there are missing values (coded as NA). The presence of missing days may introduce bias into some calculations or summaries of the data.
 
+* Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+* Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+* Create a new dataset that is equal to the original dataset but with the missing data filled in.
+* Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
 
+The amount of missing values currently is `r sum(is.na(activity$steps))`.
 
-## Are there differences in activity patterns between weekdays and weekends?
+To get some more data accuracy I thought it might be more reflective of the overall data set if we added the means of each interval (data that we'd already calculated in one of the previous steps).
+
+```{r transform}
+#Transformation by using for/if loops to test each element in the activity steps group for whether it's NA and then to find the relevant value within the "isteps" (Average steps per interval) data frame.
+
+for(i in 1:length(activity$steps)){
+    if(is.na(activity[i,1])){
+         for(j in 1:length(istep$int)){
+               if(istep[j,1]==activity[i,3]){
+                     activity[i,1]<-round(istep[j,2])
+                 }
+                    
+              }
+      } 
+}
+```
+Now that the transformation is done we can effectively repeat the process from the first question.
+
+```{r q3}
+dstep2 <- with(activity, tapply(steps,date,sum))
+dstep2<-dstep2[!is.na(dstep2)]
+ggplot()+aes(dstep2)+geom_histogram(binwidth=2500)+labs(y="Histogram count",x="Daily volume of steps")+ggtitle("Updated histogram of Daily volume of steps")
+dsmean2 <- mean(dstep2)
+dsmed2 <- median(dstep2)
+```
+While the original values for mean & median were `r dsmean` and `r dsmed`, the new ones are `r dsmean2` and `r dsmed2`, slightly different.
+
+#Part 4 (Are there differences in activity patterns between weekdays and weekends?)
+
+* Create a new factor variable in the dataset with two levels -- "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+* Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis).
+
+The relevant data transformation and plot code is below, although I'm sure there was a more efficient way to create that factor.
+
+```{r q4}
+activity$weekday <- weekdays(as.Date(activity$date))
+activity[activity$weekday%in%c("Monday","Tuesday","Wednesday","Thursday","Friday"),5]<-"Weekday"
+activity[activity$weekday%in%c("Saturday","Sunday"),5]<-"Weekend"
+names(activity) <- c("steps","date","interval","weekday","dtype")
+activity$dtype <- as.factor(activity$dtype)
+idstep <- aggregate(activity$steps,by=c(activity["dtype"],activity["interval"]),FUN=mean)
+ggplot(idstep)+aes(interval,x)+geom_line()+facet_grid(~dtype)+labs(y="Number of steps",x="Interval")
+```
+
+Thanks for reading!
+
+owilks
